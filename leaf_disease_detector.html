@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plant Leaf Disease Detection using CNN</title>
+<!--
+  MINI PROJECT: Plant Leaf Disease Detection using CNN (Transfer Learning)
+  How it works:
+    1. MobileNetV2 (a pretrained CNN) is loaded in the browser with TensorFlow.js.
+    2. It converts every leaf image into a feature vector (feature extraction).
+    3. A KNN classifier is trained on those vectors from your example images.
+    4. A new leaf image is classified by comparing its vector with the examples.
+  Run: just open this file in Chrome/Edge/Firefox with an internet connection.
+-->
+<style>
+  :root{
+    --bg:#f3f6ee; --card:#ffffff; --ink:#1c2b1f; --muted:#5d6b5f;
+    --leaf:#2f6b3a; --leaf-dark:#1f4a28; --line:#d5dfcb; --rust:#b4491f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,"Times New Roman",serif;line-height:1.55}
+  header{background:var(--leaf-dark);color:#f3f6ee;padding:28px 20px}
+  header h1{margin:0 auto;max-width:960px;font-size:1.7rem;font-weight:700}
+  header p{margin:6px auto 0;max-width:960px;color:#c9dcc3;font-size:.98rem}
+  main{max-width:960px;margin:0 auto;padding:20px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px;margin-bottom:20px}
+  h2{margin:0 0 4px;font-size:1.2rem}
+  .hint{color:var(--muted);margin:0 0 14px;font-size:.95rem}
+  button,input[type=text]{font:inherit}
+  button{background:var(--leaf);color:#fff;border:0;border-radius:4px;padding:8px 14px;cursor:pointer}
+  button:hover{background:var(--leaf-dark)}
+  button.ghost{background:transparent;color:var(--rust);padding:4px 8px}
+  button.ghost:hover{background:#f7e6de}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button:focus-visible,input:focus-visible{outline:3px solid #9ccf8f;outline-offset:2px}
+  input[type=text]{padding:8px 10px;border:1px solid var(--line);border-radius:4px;min-width:220px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  #status{padding:10px 14px;border-radius:4px;background:#fff6dc;border:1px solid #ecd98e;margin-bottom:20px}
+  #status.ready{background:#e4f3de;border-color:#b6d9aa}
+  #status.error{background:#fbe5de;border-color:#e3b4a3}
+  .class-box{border:1px solid var(--line);border-radius:6px;padding:14px;margin-top:14px}
+  .class-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .class-head strong{font-size:1.05rem}
+  .count{color:var(--muted);font-size:.92rem}
+  .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .thumbs img{width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid var(--line)}
+  .test-grid{display:grid;grid-template-columns:minmax(0,260px) 1fr;gap:20px;margin-top:14px}
+  #preview{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--line);background:#eef2e8}
+  .result-label{font-size:1.5rem;font-weight:700;margin:0 0 10px}
+  .bar-row{margin:8px 0}
+  .bar-top{display:flex;justify-content:space-between;font-size:.95rem}
+  .bar{height:10px;background:#e6ecde;border-radius:5px;overflow:hidden}
+  .bar>span{display:block;height:100%;background:var(--leaf)}
+  .about li{margin:4px 0}
+  @media(max-width:620px){.test-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Plant Leaf Disease Detection using CNN</h1>
+  <p>Deep neural network mini project: MobileNetV2 transfer learning running in your browser.</p>
+</header>
+
+<main>
+  <div id="status">Loading the MobileNet model. This takes a few seconds...</div>
+
+  <section>
+    <h2>Step 1: Teach the model</h2>
+    <p class="hint">Add a class for each leaf condition, then upload several example photos for each. Use at least 5 photos per class for good results (PlantVillage images work well).</p>
+    <div class="row">
+      <input type="text" id="className" placeholder="Class name, e.g. Tomato Early Blight" aria-label="Class name">
+      <button id="addClass">Add class</button>
+    </div>
+    <div id="classes"></div>
+  </section>
+
+  <section>
+    <h2>Step 2: Test a new leaf</h2>
+    <p class="hint">Upload a leaf photo the model has not seen. It predicts the closest class and shows its confidence.</p>
+    <input type="file" id="testFile" accept="image/*" aria-label="Upload a test leaf image">
+    <div class="test-grid">
+      <img id="preview" alt="Test leaf preview" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+      <div id="result"><p class="hint">The prediction will appear here.</p></div>
+    </div>
+  </section>
+
+  <section class="about">
+    <h2>About this project</h2>
+    <ul>
+      <li><strong>Model:</strong> MobileNetV2 pretrained on ImageNet (feature extractor).</li>
+      <li><strong>Classifier:</strong> K-Nearest Neighbours on the 1280-value feature vectors (k = 3).</li>
+      <li><strong>Technique:</strong> Transfer learning, so very little data and no long training is needed.</li>
+      <li><strong>Libraries:</strong> TensorFlow.js, MobileNet model, KNN classifier.</li>
+      <li><strong>Note:</strong> Everything runs locally. Your images are never uploaded anywhere.</li>
+    </ul>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.8/dist/knn-classifier.min.js"></script>
+<script>
+  let net = null;
+  const knn = knnClassifier.create();
+  const classes = {}; // name -> { count, thumbs: [dataUrl] }
+
+  const statusEl = document.getElementById('status');
+  const classesEl = document.getElementById('classes');
+  const nameInput = document.getElementById('className');
+
+  function setStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = type || '';
+  }
+
+  async function init() {
+    try {
+      net = await mobilenet.load({ version: 2, alpha: 1.0 });
+      setStatus('Model ready. Add classes and example images to begin.', 'ready');
+      addClass('Healthy');
+      addClass('Diseased');
+    } catch (e) {
+      setStatus('Could not load the model. Check your internet connection and reload the page.', 'error');
+      console.error(e);
+    }
+  }
+
+  function fileToImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => resolve({ img, url: reader.result });
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function addClass(name) {
+    name = name.trim();
+    if (!name) return;
+    if (classes[name]) { setStatus('A class named "' + name + '" already exists.', 'error'); return; }
+    classes[name] = { count: 0, thumbs: [] };
+    renderClasses();
+  }
+
+  function removeClass(name) {
+    try { knn.clearClass(name); } catch (e) { /* class had no examples */ }
+    delete classes[name];
+    renderClasses();
+  }
+
+  function renderClasses() {
+    classesEl.innerHTML = '';
+    Object.keys(classes).forEach(name => {
+      const c = classes[name];
+      const box = document.createElement('div');
+      box.className = 'class-box';
+
+      const head = document.createElement('div');
+      head.className = 'class-head';
+      const title = document.createElement('div');
+      title.innerHTML = '<strong></strong> <span class="count"></span>';
+      title.querySelector('strong').textContent = name;
+      title.querySelector('.count').textContent = '(' + c.count + ' example' + (c.count === 1 ? '' : 's') + ')';
+
+      const actions = document.createElement('div');
+      actions.className = 'row';
+      const file = document.createElement('input');
+      file.type = 'file'; file.accept = 'image/*'; file.multiple = true;
+      file.setAttribute('aria-label', 'Upload example images for ' + name);
+      file.addEventListener('change', () => addExamples(name, file.files));
+      const del = document.createElement('button');
+      del.className = 'ghost'; del.textContent = 'Remove class';
+      del.addEventListener('click', () => removeClass(name));
+      actions.append(file, del);
+      head.append(title, actions);
+
+      const thumbs = document.createElement('div');
+      thumbs.className = 'thumbs';
+      c.thumbs.slice(-24).forEach(u => {
+        const t = document.createElement('img');
+        t.src = u; t.alt = 'Example of ' + name;
+        thumbs.appendChild(t);
+      });
+
+      box.append(head, thumbs);
+      classesEl.appendChild(box);
+    });
+  }
+
+  async function addExamples(name, files) {
+    if (!net) { setStatus('The model is still loading.', 'error'); return; }
+    if (!files.length) return;
+    setStatus('Training on ' + files.length + ' image(s) for "' + name + '"...');
+    for (const f of files) {
+      try {
+        const { img, url } = await fileToImage(f);
+        const features = net.infer(img, true);   // CNN feature vector
+        knn.addExample(features, name);
+        features.dispose();
+        classes[name].count++;
+        classes[name].thumbs.push(url);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    renderClasses();
+    setStatus('Training done for "' + name + '". You can now test a new leaf.', 'ready');
+  }
+
+  async function predict(file) {
+    const resultEl = document.getElementById('result');
+    if (!net) { setStatus('The model is still loading.', 'error'); return; }
+    const { img, url } = await fileToImage(file);
+    document.getElementById('preview').src = url;
+
+    if (knn.getNumClasses() < 1) {
+      resultEl.innerHTML = '<p class="hint">Add example images in Step 1 first.</p>';
+      return;
+    }
+    const features = net.infer(img, true);
+    const res = await knn.predictClass(features, 3);
+    features.dispose();
+
+    const sorted = Object.entries(res.confidences).sort((a, b) => b[1] - a[1]);
+    resultEl.innerHTML = '';
+    const label = document.createElement('p');
+    label.className = 'result-label';
+    label.textContent = res.label + ' (' + Math.round(res.confidences[res.label] * 100) + '%)';
+    resultEl.appendChild(label);
+
+    sorted.forEach(([name, conf]) => {
+      const pct = Math.round(conf * 100);
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML = '<div class="bar-top"><span></span><span>' + pct + '%</span></div><div class="bar"><span style="width:' + pct + '%"></span></div>';
+      row.querySelector('.bar-top span').textContent = name;
+      resultEl.appendChild(row);
+    });
+  }
+
+  document.getElementById('addClass').addEventListener('click', () => {
+    addClass(nameInput.value);
+    nameInput.value = '';
+  });
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { addClass(nameInput.value); nameInput.value = ''; }
+  });
+  document.getElementById('testFile').addEventListener('change', e => {
+    if (e.target.files[0]) predict(e.target.files[0]);
+  });
+
+  init();
+</script>
+</body>
+</html>
